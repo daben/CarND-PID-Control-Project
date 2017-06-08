@@ -1,7 +1,5 @@
-#ifndef PID_H
-#define PID_H
+#pragma once
 
-#include <chrono>
 
 class PID {
 public:
@@ -18,7 +16,12 @@ public:
   double Ki;
   /// Derivative gain
   double Kd;
-
+  
+  /// Exponential smoothing for the integral error.
+  /// This parameters dimisnishes the effect of past errors.
+  /// Default value is 1.0 which makes this a standard PID.
+  double i_alpha;
+  
   /*
   * Constructor
   */
@@ -32,21 +35,15 @@ public:
   /*
   * Initialize PID.
   */
-  void Init(double Kp, double Ki, double Kd);
+  void Init(double Kp, double Ki, double Kd, double i_alpha=1.0);
 
   /*
   * Update the PID error variables given cross track error.
   */
-  void UpdateError(double cte);
+  void UpdateError(double error, double dt=1.0);
 
   /*
   * Calculate the total PID error.
   */
   double TotalError();
-  
-private:
-  using clock = std::chrono::steady_clock;
-  clock::time_point time_point_;
 };
-
-#endif /* PID_H */

@@ -3,6 +3,49 @@ Self-Driving Car Engineer Nanodegree Program
 
 ---
 
+## Reflections
+
+In this implementation the steering is controlled by a PID controller with the following parameters optimized for a target speed of **50 mph**: `P = 0.106, I = 0.001, D = 2.400`.
+
+If `cte` is the cross track error, and assuming a time step `dt = 1`, the steering value becomes:
+
+	steering(t) = - P * cte(t) - I * i_error(t) - D * (cte(t) - cte(t-1))
+	
+To avoid the accumulation of the integral error, `i_error`, a memory loss mechanism is implemented in this way: 
+	
+	i_error(t) = cte(t) + 0.95 * i_error(t-1)
+	
+The steering is clipped to the range `[-1, 1]` using the `tanh` function to smooth the clipping in the extremes. Also, an exponential filter is used to smooth the steering in time.
+
+The meaning of the PID gains is the following:
+
+* The gain P builds a term proportional to the current error. It works in the present and it's the main factor to keep the car in the road and turn in the curves. A small value will make the car to respond slowly (like having a big inertia). A value too high will make the car oscillate (and potentially go out of the road) like a leaf in the wind. 
+
+* The integral gain, I, accounts for the past error. It allows to correct for a bias in the steering. If the P gain is not strong enough to keep the car in the center, the error will accumulate and the integral term will correct it. However, this can leads to more oscillations and overshotting if the error accumulates indefinitely. 
+
+* The derivative gain, D, accounts for the future changes trying to cancel the rate of change of the error. It's basically a damping force that compensates the oscillations, flattening the trajectory. However, a value too high will make car unable to react in time in a curve or it will introduce to many corrections making the system unstable.
+
+In this solution, the throttle is also controlled with a mechanism equivalent to having two P-controllers connected in serie. One direct controller proportional to the speed error (the difference bettween the current and the target speeds). And another reverse controller proportional to the `cte` and a smoothed exponential to the speed that will make the car to brake harder at higher speeds:
+
+	throttle = a * speed_error - b * abs(cte) * exp(1.1 * abs(speed)/100  - 1),
+
+where 
+	
+	speed_error = target_speed - current_speed + speed_margin	
+
+Tuning the throttle parameters `a` and `b` allows for different driving modes. From a maniac driver (high `a`, and low `b`) to a scared novice driver pushing the brake at the minimum risk (low `a`, high `b`). Somewhere in the middle allows to play with higher speeds and smooth driving. In the current implementation these are the values chosen:
+
+* `a = 0.2`
+* `b = 0.8`
+
+All these parameters were tuned manually with an interactive input loop that allows to see the changes in real time. Fixed the throttle parameters to a convservative driving style, and fixed the `I` gain to a small value, the biggest task was to tune the P and D gains until the trajectory seemed stable. I also tried with an implementation of the twiddle algorithm, a derivative-free optimization algorithm, see [coordinate descent](https://en.wikipedia.org/wiki/Coordinate_descent), trying to minimize the `cte` plus the error on the average speed. Howevert, the convergence to a minimum seemed too slow to be apply online. The implementation is included in the repository.
+
+When tuning the parameters, the biggest challenge was that the PID gains are dependent on the speed. Above certain limit it's not possible to keep the speed of the car constant for the obvious reason that there are curves in the circuit. A PID with adaptive or scheduled gains is possible. However, the throttle control mechanism is enough to drive at speeds below 60 mph. To drive at higher speeds, a different configuration of parameters or a more robust controller is needed.
+
+## Demo
+
+[![Demo 50 MPH](video.gif)](video.mp4)
+
 ## Dependencies
 
 * cmake >= 3.5

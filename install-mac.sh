@@ -7,8 +7,8 @@ mkdir build
 export PKG_CONFIG_PATH=/usr/local/opt/openssl/lib/pkgconfig 
 cd build
 cmake ..
-make 
-sudo make install
+make install
+# sudo make install
 cd ..
 cd ..
-sudo rm -r uWebSockets
+# sudo rm -r uWebSockets

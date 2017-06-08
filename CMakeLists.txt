@@ -8,9 +8,11 @@ set(CXX_FLAGS "-Wall")
 set(CMAKE_CXX_FLAGS, "${CXX_FLAGS}")
 
 set(sources 
+    src/controller.h
     src/PID.h
     src/twiddle.h
     src/json.hpp
+    src/controller.cpp
     src/PID.cpp 
     src/twiddle.cpp 
     src/main.cpp

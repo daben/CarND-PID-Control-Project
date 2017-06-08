@@ -7,91 +7,135 @@
 //
 
 #include "twiddle.h"
+#include <iostream>
+#include <iomanip>
 
+std::ostream& operator<<(std::ostream& o, const std::valarray<double> &array) {
+  o << "[";
+  for (int i = 0; i < array.size(); ++i) {
+    if (i > 0) o << ", ";
+    o << array[i];
+  }
+  o << "]";
+  return o;
+}
 
-void Twiddle::Init(const array& params, const array& perturbation, const int cycle)
+void Twiddle::Init(const array& params, const array& steps, const int cycle)
 {
   this->params = params;
-  this->perturbation.resize(params.size());
-  this->perturbation = perturbation;
-  
-  this->count_cycle = cycle;
-  this->count = 0;
+  this->steps = steps;
+  this->cycle_size = cycle;
+
+  this->best_error = INFINITY;
   this->current_error = 0;
-  this->best_error = -1;
   this->current_param = 0;
-  this->_state = 0;
+  this->count = 0;
+  this->state = 0;
 }
 
-void Twiddle::Reset()
+void Twiddle::ResetCycle()
 {
-  count = 0;
+  std::cout << "Twiddle: ResetCycle" << std::endl;
+  // reset param back
+  if (state == 1) {
+    params[current_param] -= 2 * steps[current_param];
+  } else if (state == 2) {
+    params[current_param] += steps[current_param];
+  }
+  // try next param
+  current_param = (current_param + 1) % params.size();
+  // Reset state
   current_error = 0;
-  _state = 0;
+  state = 0;
+  count = 0;
 }
 
-bool Twiddle::Update(double cte)
+
+bool Twiddle::Update(double error)
 {
-  current_error += cte * cte;
   count ++;
-  
-  if (count % count_cycle == 0) {
+  current_error += error;
+
+  LogStatus();
+
+  if (count == cycle_size) {
     // Simulation cycle completed, get error and twiddle params
-    TwiddleParams();
+    TwiddleParams(current_error / cycle_size);
     // reset error
     current_error = 0;
+    // reset count
+    count = 0;
     // must update parameters in system
     return true;
   }
-  
+
   return false;
 }
 
-double Twiddle::TotalPerturbation()
+double Twiddle::TotalStep() const
 {
-  return std::abs(perturbation).sum();
+  return std::abs(steps).sum();
 }
 
-void Twiddle::TwiddleParams()
+void Twiddle::TwiddleParams(double error)
 {
-  do
-  {
-    switch (_state) {
-      case 0:
-        best_error = current_error;
-//        printf("params[%d] += %.2f\n", current_param, perturbation[current_param]);
-        params[current_param] += perturbation[current_param];
-        _state = 1; // simulate
-        break;
-        
-      case 1:
-        if (current_error < best_error) {
-          best_error = current_error;
-          perturbation[current_param] *= 1.05;
-          // finished with this param
-          current_param = (current_param + 1) % params.size();
-          _state = 0;
-        } else {
-          params[current_param] -= 2 * perturbation[current_param];
-          _state = 2; // simulate
-        }
-        break;
-        
-      case 2:
-        if (current_error < best_error) {
-          best_error = current_error;
-          perturbation[current_param] *= 1.05;
-        } else {
-          params[current_param] += perturbation[current_param];
-//          printf("params[%d] += %.2f\n", current_param, perturbation[current_param]);
-          perturbation[current_param] *= 0.95;
-        }
-        
-        // finished with this param
-        current_param = (current_param + 1) % params.size();
-        _state = 0;
-        break;
-    }
-  } while (_state == 0);
+  if (state == 0) {
+    // ascend
+    params[current_param] += steps[current_param];
+    state = 1; // simulate
+    return;
+  }
+
+  if (error < best_error) {
+    // success, keep going
+    best_error = error;
+    best_params = params;
+    best_steps = steps;
+    steps[current_param] *= (1.0 + delta);
+  }
+  else if (state == 1) {
+    // failed, descent and keep trying
+    params[current_param] -= 2 * steps[current_param];
+    state = 2; // simulate
+    return;
+  }
+  else { // state == 2
+    // ascend and descent failed, recover original and shrink
+    params[current_param] += steps[current_param];
+    steps[current_param] *= (1.0 - delta);
+  }
+  
+  // switch to next param
+  current_param = (current_param + 1) % params.size();
+  // ascend
+  params[current_param] += steps[current_param];
+  state = 1; // simulate
 }
 
+void Twiddle::LogStatus() const
+{
+  std::ios::fmtflags flags(std::cout.flags());
+  std::cout << std::scientific << std::setprecision(3);
+
+  std::cout << "[" << count << "] Twiddle:";
+
+  std::cout << " p = ";
+  for(auto p : params)
+    std::cout << p << " ";
+
+  std::cout << " dp = ";
+  for(auto dp : steps)
+    std::cout << dp << " ";
+
+  std::cout << std::fixed;
+  std::cout << " error: " << (current_error / count)
+            << " best_error: " << best_error
+            << " best_params: " << best_params
+            << " step: " << TotalStep()
+            << " param: " << current_param
+            << " state: " << state
+            << " cycle: " << count <<  " of " << cycle_size
+            << std::endl;
+
+  std::cout.flags(flags);
+}
